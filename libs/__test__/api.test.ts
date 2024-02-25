@@ -1,4 +1,4 @@
-import { BASE_URL, searchByCategories } from '../api';
+import { BASE_URL, searchByCategories, getNeedPollingData } from '../api';
 import { SEARCH_TERMS_OPTIONS } from '@/constants/search-terms';
 
 global.fetch = jest.fn();
@@ -69,5 +69,51 @@ describe('searchByCategories', () => {
     const results = await searchByCategories(searchTerms, searchValue);
 
     expect(results.length).toBe(0);
+  });
+});
+
+describe('getNeedPollingData', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('fetches data successfully from multiple URLs and returns concatenated names', async () => {
+    jest.spyOn(global, 'fetch').mockImplementation((url) =>
+      Promise.resolve({
+        json: () => Promise.resolve((url as string).includes('name') ? { name: 'Test Name' } : { title: 'Test Title' }),
+      } as any)
+    );
+
+    const urls = ['http://test.com/name', 'http://test.com/title'];
+    const expectedResult = 'Test Name, Test Title';
+
+    const result = await getNeedPollingData(urls);
+
+    expect(result).toBe(expectedResult);
+  });
+
+  test('returns only successfully fetched names when some requests fail', async () => {
+    jest.spyOn(global, 'fetch').mockImplementation((url) =>
+      (url as string).includes('fail')
+        ? Promise.reject(new Error('Fetch failed'))
+        : Promise.resolve({
+            json: () => Promise.resolve({ title: 'Successful Title' }),
+          } as any)
+    );
+
+    const urls = ['http://test.com/fail', 'http://test.com/success'];
+    const expectedResult = 'Successful Title';
+
+    const result = await getNeedPollingData(urls);
+
+    expect(result).toBe(expectedResult);
+  });
+
+  test('throws an error when all fetch requests fail', async () => {
+    jest.spyOn(global, 'fetch').mockRejectedValue(new Error('Fetch failed'));
+
+    const urls = ['http://test.com/fail1', 'http://test.com/fail2'];
+
+    await expect(getNeedPollingData(urls)).rejects.toThrow('Failed to fetch films details');
   });
 });
